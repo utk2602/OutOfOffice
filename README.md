@@ -20,6 +20,6 @@ Implemented core packages:
 - `voice-sdk`: PCM16 validation and packetization, bounded playback, pacing, per-frame authorization and cancellation.
 - `voice-worker`: meeting session runtime, event deduplication, pinned knowledge grants, follow-ups, control commands and guarded speech orchestration.
 
-The responder uses verbatim approved facts; it does not yet call an LLM or synthesize speech. Audio tests use synthetic tones and fake transports. The audio transport contract and limitations are described in [docs/audio.md](docs/audio.md).
+The responder uses verbatim approved facts. Windows stock speech can render that text offline; `pnpm speech:check` verifies the installed voice without playing sound. It does not call an LLM. Automated audio tests use synthetic tones and fake transports. The audio transport contract and limitations are described in [docs/audio.md](docs/audio.md).
 
-Persistence, the local API and runnable meeting demo are subsequent commits. No UI or live meeting integration is implemented yet.
+PostgreSQL persistence, scoped grants and transactional dispatch are implemented in `packages/database`. The local API and runnable meeting demo are subsequent commits. No UI or live meeting integration is implemented yet.

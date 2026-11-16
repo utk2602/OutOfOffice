@@ -9,7 +9,8 @@
     "setup:local": "tsx scripts/setup.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test.ts",
-    "test:audio": "tsx --test packages/voice-sdk/test/audio.test.ts"
+    "test:audio": "tsx --test packages/voice-sdk/test/audio.test.ts packages/voice-sdk/test/speech.test.ts",
+    "speech:check": "tsx scripts/speech-check.ts"
   },
   "devDependencies": {
     "@types/node": "22.18.0",
