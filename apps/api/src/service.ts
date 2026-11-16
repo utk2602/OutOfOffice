@@ -29,6 +29,8 @@ export class AgentService {
   private readonly subscribers = new Map<string, number>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private ticking = false;
+  private closing = false;
+  get isClosing(): boolean { return this.closing; }
   constructor(readonly store: RecordStore, private readonly synth: SpeechSynthesizer) { this.events.setMaxListeners(100); }
   async initialize(): Promise<void> {
     await this.store.recoverInterrupted(); await this.store.pruneRetention();
@@ -69,6 +71,7 @@ export class AgentService {
   }
   async dispatch(owner: string, body: unknown, key: string) {
     return this.serial('dispatch', async () => {
+      if (this.closing) throw new StoreError('SHUTTING_DOWN', 'The local worker is shutting down.', 503);
       const input = meetingInputSchema.parse(body); const result = await this.store.dispatch(owner, input, key);
       if (result.created) {
         try {
@@ -100,7 +103,7 @@ export class AgentService {
     await this.store.getRecord(owner, id);
     const session = this.sessions.get(id);
     if (!session) {
-      if (action === 'leave' || action === 'revoke' || action === 'mute') return this.store.getRecord(owner, id);
+      if (action === 'leave' || action === 'revoke' || action === 'mute') return this.getRecord(owner, id);
       throw new SessionError('MEETING_ENDED', 'The meeting has ended.');
     }
     // Cancellation is synchronous after ownership verification; it never waits behind slow persistence.
@@ -200,11 +203,19 @@ export class AgentService {
     finally { this.ticking = false; }
   }
   async close(): Promise<void> {
+    this.closing = true;
     clearInterval(this.timer);
     for (const session of this.sessions.values()) {
       session.end('DISCONNECTED');
       try { await this.persist(session.snapshot().meeting.ownerId, session); } catch { /* Restart reconciliation remains authoritative. */ }
     }
     await Promise.allSettled([...this.locks.values()]); this.events.removeAllListeners();
+    // A dispatch already in flight when shutdown began may have attached a session while locks drained.
+    for (const session of this.sessions.values()) {
+      if (session.snapshot().meeting.status !== 'ACTIVE') continue;
+      session.end('DISCONNECTED');
+      try { await this.persist(session.snapshot().meeting.ownerId, session); } catch { /* Restart recovery settles any remaining reservation. */ }
+    }
+    this.sessions.clear();
   }
 }

@@ -9,8 +9,11 @@
     "setup:local": "tsx scripts/setup.ts",
     "dev": "tsx watch apps/api/src/main.ts",
     "start": "tsx apps/api/src/main.ts",
+    "build": "pnpm --filter @outofoffice/api build",
+    "start:built": "node apps/api/dist/main.js",
     "agent": "tsx scripts/client.ts",
     "demo": "tsx scripts/demo.ts",
+    "eval:agent": "tsx scripts/evaluate.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test.ts",
     "test:integration": "tsx --test apps/api/test/api.test.ts",
@@ -20,7 +23,6 @@
   "devDependencies": {
     "@types/node": "22.18.0",
     "@types/pg": "8.15.5",
-    "@types/ws": "8.18.1",
     "tsup": "8.5.0",
     "tsx": "4.23.15",
     "typescript": "5.9.3"

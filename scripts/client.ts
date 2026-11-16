@@ -112,7 +112,8 @@ async function main() {
       const meetingId = part(1);
       let question = positionals[2];
       if (command === 'listen') {
-        await client.json(`/api/v1/meetings/${meetingId}`);
+        const record = await client.json(`/api/v1/meetings/${meetingId}`);
+        if (record.meeting.status !== 'ACTIVE' || record.meeting.speechState !== 'READY') throw new Error('Use an active, unmuted meeting before opening the microphone.');
         console.error('Listening locally for one English utterance, up to 10 seconds. Address OutOfOffice directly.');
         const recognized = await new WindowsSpeechRecognizer().listen(controller.signal);
         if (recognized.confidence < 0.65) throw new Error('Recognition confidence was too low; nothing was submitted. Please try again or use ask.');

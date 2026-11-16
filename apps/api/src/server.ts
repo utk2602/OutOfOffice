@@ -148,6 +148,7 @@ export async function createApi(options: { store: RecordStore; identities: ApiId
     const identity = credentials.find(credential => timingSafeEqual(credential.digest, digest));
     if (!identity) { fail(401, 'UNAUTHORIZED', 'A valid local bearer token is required.'); return; }
     request.ownerId = identity.ownerId;
+    if (service.isClosing) { fail(503, 'SHUTTING_DOWN', 'The local worker is shutting down.'); return; }
     const rate = rates.get(identity.ownerId) ?? { count: 0, since: Date.now() };
     if (Date.now() - rate.since >= 60_000) { rate.count = 0; rate.since = Date.now(); }
     rate.count++; rates.set(identity.ownerId, rate);

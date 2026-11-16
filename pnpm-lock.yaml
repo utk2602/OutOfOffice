@@ -14,9 +14,6 @@ importers:
       '@types/pg':
         specifier: 8.15.5
         version: 8.15.5
-      '@types/ws':
-        specifier: 8.18.1
-        version: 8.18.1
       tsup:
         specifier: 8.5.0
         version: 8.5.0(tsx@4.23.15)(typescript@5.9.3)
@@ -29,6 +26,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@electric-sql/pglite':
+        specifier: 0.5.16
+        version: 0.5.16
       '@nestjs/common':
         specifier: 12.5.0
         version: 12.5.0(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -50,6 +50,9 @@ importers:
       '@outofoffice/voice-worker':
         specifier: workspace:*
         version: link:../voice-worker
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
       proper-lockfile:
         specifier: 4.1.2
         version: 4.1.2
@@ -641,9 +644,6 @@ packages:
 
   '@types/retry@0.12.5':
     resolution: {integrity: sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw==}
-
-  '@types/ws@8.18.1':
-    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -1593,10 +1593,6 @@ snapshots:
       '@types/retry': 0.12.5
 
   '@types/retry@0.12.5': {}
-
-  '@types/ws@8.18.1':
-    dependencies:
-      '@types/node': 22.18.0
 
   accepts@2.0.0:
     dependencies:

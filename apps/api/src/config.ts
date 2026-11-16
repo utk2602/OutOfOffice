@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 export const environmentSchema = z.object({
   HOST: z.enum(['127.0.0.1', 'localhost', '::1']).default('127.0.0.1'),
@@ -12,8 +14,11 @@ export const environmentSchema = z.object({
   MAX_CONCURRENT_MEETINGS: z.coerce.number().int().min(1).max(2).default(1),
 });
 export function loadEnvironment() {
-  try { process.loadEnvFile('.env'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  let root = process.cwd();
+  while (!existsSync(join(root, 'pnpm-workspace.yaml')) && dirname(root) !== root) root = dirname(root);
+  if (!existsSync(join(root, 'pnpm-workspace.yaml'))) root = process.cwd();
+  try { process.loadEnvFile(join(root, '.env')); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const result = environmentSchema.safeParse(process.env);
   if (!result.success) throw new Error(`Invalid local configuration (${result.error.issues.map(issue => issue.path.join('.')).join(', ')}). Run pnpm setup:local and check .env.`);
-  return result.data;
+  return { ...result.data, DATA_DIRECTORY: resolve(root, result.data.DATA_DIRECTORY) };
 }

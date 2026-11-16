@@ -137,3 +137,15 @@ test('deleting an agent revokes and deletes its meetings and knowledge under the
   assert.equal((await request(`/api/v1/meetings/${meeting.id}`)).status, 404);
   assert.equal((await json('/api/v1/usage')).reservedSeconds, 0);
 });
+test('a draining worker rejects new requests and is not ready', async () => {
+  const isolatedDb = await Database.open();
+  const isolated = await createApi({ store: new RecordStore(isolatedDb, { budgetSeconds: 900, maxMeetingSeconds: 900, maxConcurrentMeetings: 1 }), identities: [first] });
+  try {
+    await isolated.app.listen(0, '127.0.0.1'); const url = await isolated.app.getUrl();
+    await isolated.service.close();
+    for (const path of ['/health/ready', '/api/v1/agents']) {
+      const response = await fetch(`${url}${path}`, { headers: { Authorization: `Bearer ${first.token}` } });
+      assert.equal(response.status, 503); assert.equal((await response.json() as any).error.code, 'SHUTTING_DOWN');
+    }
+  } finally { await isolated.close(); await isolatedDb.close(); }
+});

@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "exports": "./src/server.ts",
+  "scripts": { "build": "tsup", "start": "node dist/main.js" },
   "dependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "pg": "8.23.1",
     "@outofoffice/shared": "workspace:*",
     "@outofoffice/database": "workspace:*",
     "@outofoffice/voice-worker": "workspace:*",

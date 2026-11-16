@@ -21,4 +21,8 @@ async function main() {
     process.once('SIGINT', () => { void shutdown(); }); process.once('SIGTERM', () => { void shutdown(); });
   } catch (error) { await api?.close(); await database?.close(); await release(); throw error; }
 }
-main().catch(() => { console.error('OutOfOffice could not start. Check local configuration, database access, and whether the port is in use.'); process.exitCode = 1; });
+main().catch(error => {
+  if (error && typeof error === 'object' && 'code' in error && error.code === 'ELOCKED') console.error('Another OutOfOffice process owns this workspace. Stop it before starting a replacement.');
+  else console.error('OutOfOffice could not start. Run pnpm setup:local and check configuration, database access, and whether the port is in use.');
+  process.exitCode = 1;
+});
