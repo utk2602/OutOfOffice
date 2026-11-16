@@ -27,6 +27,18 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  apps/voice-worker:
+    dependencies:
+      '@outofoffice/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/agent-core
+      '@outofoffice/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@outofoffice/voice-sdk':
+        specifier: workspace:*
+        version: link:../../packages/voice-sdk
+
   packages/agent-core:
     dependencies:
       '@outofoffice/shared':

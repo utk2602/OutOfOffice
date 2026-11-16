@@ -1,0 +1,11 @@
+{
+  "name": "@outofoffice/voice-worker",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@outofoffice/agent-core": "workspace:*",
+    "@outofoffice/shared": "workspace:*",
+    "@outofoffice/voice-sdk": "workspace:*"
+  }
+}

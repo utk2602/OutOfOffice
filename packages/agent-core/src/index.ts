@@ -89,7 +89,7 @@ export class PlaybackGate {
       Object.entries(permit.sourceVersions).every(([id, version]) => currentSourceVersions[id] === version);
   }
   interrupt(): void { this.epoch++; }
-  mute(): void { this.state = 'MUTED'; this.interrupt(); }
+  mute(): void { if (this.state !== 'CLOSED') this.state = 'MUTED'; this.interrupt(); }
   unmute(): void { if (this.state !== 'CLOSED') { this.state = 'READY'; this.interrupt(); } }
   revoke(): void { this.state = 'CLOSED'; this.grantVersion++; this.interrupt(); }
   get currentEpoch(): number { return this.epoch; }

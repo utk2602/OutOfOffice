@@ -57,7 +57,11 @@ export type Decision = {
 export type ResponseRecord = Decision & {
   id: string; meetingId: string; eventId: string; speaker: string; question: string;
   epoch: number; grantVersion: number; createdAt: string;
-  playbackStatus: 'NOT_SPOKEN' | 'AUTHORIZED' | 'INTERRUPTED' | 'CANCELLED';
+  playbackStatus: 'NOT_SPOKEN' | 'AUTHORIZED' | 'TRANSMITTED' | 'INTERRUPTED' | 'CANCELLED' | 'FAILED';
+};
+export type TranscriptEntry = UtteranceInput & { receivedAt: string };
+export type SessionRecord = {
+  meeting: Meeting; transcript: TranscriptEntry[]; responses: ResponseRecord[]; followUps: FollowUp[];
 };
 export type FollowUp = {
   id: string; meetingId: string; responseId: string; question: string; reason: string;

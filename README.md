@@ -18,7 +18,8 @@ Implemented core packages:
 - `shared`: strict request contracts, private-by-default facts, supported meeting URL validation.
 - `agent-core`: direct-address routing, scoped evidence, conservative deferral, revocable playback permits.
 - `voice-sdk`: PCM16 validation and packetization, bounded playback, pacing, per-frame authorization and cancellation.
+- `voice-worker`: meeting session runtime, event deduplication, pinned knowledge grants, follow-ups, control commands and guarded speech orchestration.
 
 The responder uses verbatim approved facts; it does not yet call an LLM or synthesize speech. Audio tests use synthetic tones and fake transports. The audio transport contract and limitations are described in [docs/audio.md](docs/audio.md).
 
-The worker, persistence, local API and runnable meeting demo are subsequent commits. No UI or live meeting integration is implemented yet.
+Persistence, the local API and runnable meeting demo are subsequent commits. No UI or live meeting integration is implemented yet.

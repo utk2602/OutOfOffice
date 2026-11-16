@@ -91,3 +91,7 @@ test('meeting expiry and a new turn invalidate old audio', () => {
   assert.equal(gate.allows(first), false); assert.equal(gate.allows(second), true);
   time += 1000; assert.equal(gate.allows(second), false); assert.equal(gate.begin(), null);
 });
+test('mute and unmute cannot reopen a revoked playback gate', () => {
+  const gate = new PlaybackGate(now + 1000, () => now);
+  gate.revoke(); gate.mute(); gate.unmute(); assert.equal(gate.begin(), null);
+});
