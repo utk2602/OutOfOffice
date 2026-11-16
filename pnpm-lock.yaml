@@ -39,6 +39,12 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
 
+  packages/voice-sdk:
+    dependencies:
+      '@outofoffice/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+
 packages:
 
   '@esbuild/aix-ppc64@0.25.12':

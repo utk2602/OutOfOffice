@@ -7,15 +7,9 @@
   "engines": { "node": ">=22.12.0" },
   "scripts": {
     "setup:local": "tsx scripts/setup.ts",
-    "dev": "tsx watch apps/api/src/main.ts",
-    "start": "tsx apps/api/src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test.ts",
-    "test:integration": "tsx --test apps/api/test/api.test.ts",
-    "test:audio": "tsx --test packages/voice-sdk/test/audio.test.ts",
-    "demo": "tsx scripts/demo.ts",
-    "agent": "tsx scripts/client.ts",
-    "build": "tsup apps/api/src/main.ts --format esm --platform node --target node22 --out-dir dist --sourcemap --external @electric-sql/pglite --external pg --external @google/genai --external @nestjs/core --external @nestjs/common --external @nestjs/platform-express"
+    "test:audio": "tsx --test packages/voice-sdk/test/audio.test.ts"
   },
   "devDependencies": {
     "@types/node": "22.18.0",

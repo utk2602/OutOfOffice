@@ -10,6 +10,15 @@ Use Node.js 22.12+ (Node 24 LTS recommended) and pnpm 10.12.4. In Windows PowerS
 pnpm install
 pnpm typecheck
 pnpm test
+pnpm test:audio
 ```
 
-The initial workspace defines validated input contracts and private-by-default facts. Subsequent commits add the response policy, audio worker, persistence and local API. Run commands described here only as their implementation lands.
+Implemented core packages:
+
+- `shared`: strict request contracts, private-by-default facts, supported meeting URL validation.
+- `agent-core`: direct-address routing, scoped evidence, conservative deferral, revocable playback permits.
+- `voice-sdk`: PCM16 validation and packetization, bounded playback, pacing, per-frame authorization and cancellation.
+
+The responder uses verbatim approved facts; it does not yet call an LLM or synthesize speech. Audio tests use synthetic tones and fake transports. The audio transport contract and limitations are described in [docs/audio.md](docs/audio.md).
+
+The worker, persistence, local API and runnable meeting demo are subsequent commits. No UI or live meeting integration is implemented yet.
