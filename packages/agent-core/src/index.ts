@@ -18,7 +18,9 @@ export type TurnContext = {
 
 /** Conservative routing: only an explicit salutation at the start claims the floor. */
 export function isAddressed(text: string, name: string): boolean {
-  const names = [name, 'AI delegate'].map(escape).join('|');
+  const aliases = [name, 'AI delegate'];
+  if (normalize(name).replaceAll(' ', '') === 'outofoffice') aliases.push('Out of office');
+  const names = aliases.map(escape).join('|');
   return new RegExp(`^(?:(?:hey|hi|hello|okay|ok)\\s+)?(?:${names})(?=[\\s,:?!]|$)`, 'i').test(text.trim());
 }
 
@@ -48,7 +50,8 @@ export function decideTurn(context: TurnContext): Decision {
   if (!/\?|\b(what|how|when|where|why|which|who|can|could|would|share|tell|give|report|any|is|are|do|did)\b/i.test(question)) return deferred('INCOMPLETE_QUESTION');
 
   const facts = eligibleFacts(context);
-  const identityWords = new Set(words(`${agent.displayName} ${agent.ownerName} AI delegate hey hi hello okay ok`));
+  const spokenName = normalize(agent.displayName).replaceAll(' ', '') === 'outofoffice' ? 'Out of office' : '';
+  const identityWords = new Set(words(`${agent.displayName} ${spokenName} ${agent.ownerName} AI delegate hey hi hello okay ok`));
   const queryWords = new Set(words(question).filter(word => !identityWords.has(word)));
   const ranked = facts.map(fact => ({ fact, score: words(`${fact.topic} ${fact.title}`).filter(word => queryWords.has(word)).length }))
     .filter(item => item.score > 0).sort((a, b) => b.score - a.score || b.fact.updatedAt.localeCompare(a.fact.updatedAt));

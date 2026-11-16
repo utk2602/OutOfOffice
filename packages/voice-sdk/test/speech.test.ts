@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pcmToWav, tone, AudioProtocolError } from '../src/index.ts';
+import { pcmToWav, tone, AudioProtocolError, parseRecognition } from '../src/index.ts';
 
 test('explicit WAV export describes the exact PCM samples and format', () => {
   const pcm = tone(24000, 20); const wav = pcmToWav(pcm);
@@ -11,4 +11,8 @@ test('explicit WAV export describes the exact PCM samples and format', () => {
 });
 test('WAV export rejects malformed or unbounded output', () => {
   for (const pcm of [Buffer.alloc(0), Buffer.alloc(3), Buffer.alloc(1_440_002)]) assert.throws(() => pcmToWav(pcm), AudioProtocolError);
+});
+test('recognition accepts final text and validates confidence bounds', () => {
+  assert.deepEqual(parseRecognition({ text: ' Out of office, what is the status? ', confidence: 0.8 }), { text: 'Out of office, what is the status?', confidence: 0.8 });
+  for (const value of [null, { text: '', confidence: 1 }, { text: 'hello', confidence: NaN }, { text: 'hello', confidence: 1.1 }, { text: 'hello' }]) assert.throws(() => parseRecognition(value));
 });

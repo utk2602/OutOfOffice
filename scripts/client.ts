@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { loadEnvironment } from '../apps/api/src/config.ts';
-import { pcmToWav } from '../packages/voice-sdk/src/index.ts';
+import { pcmToWav, WindowsSpeechRecognizer } from '../packages/voice-sdk/src/index.ts';
 import { LocalClient, ApiError } from './client-lib.ts';
 
 const help = `OutOfOffice local agent CLI
@@ -20,6 +20,7 @@ pnpm agent delete-fact <factId>
 pnpm agent delete-agent <agentId>
 pnpm agent meeting <agentId> --authorize [--sources id,id] [--duration 300] [--title Standup] [--key retry-key]
 pnpm agent ask <meetingId> "OutOfOffice, what is the status?" [--speaker Sam] [--speak]
+pnpm agent listen <meetingId> [--speaker Sam] [--speak]
 pnpm agent render <meetingId> <responseId> --out answer.wav
 pnpm agent mute|unmute|interrupt|leave|revoke <meetingId>
 pnpm agent show|summary|export|watch <meetingId> [--out file.json]
@@ -107,9 +108,17 @@ async function main() {
       const sources = values.sources?.split(',') ?? (await client.json<any[]>(`/api/v1/agents/${agentId}/knowledge`)).filter(fact => fact.approved && fact.sensitivity === 'MEETING' && (!fact.validUntil || Date.parse(fact.validUntil) > Date.now())).map(fact => fact.id);
       output = await client.json('/api/v1/meetings', 'POST', { agentId, title: values.title ?? 'Local standup', sourceIds: sources, maxDurationSeconds: Number(values.duration ?? 300), ownerAuthorized: true }, { 'Idempotency-Key': values.key ?? randomUUID() }); break;
     }
-    case 'ask': {
+    case 'ask': case 'listen': {
       const meetingId = part(1);
-      const response = await client.json<any>(`/api/v1/meetings/${meetingId}/utterances`, 'POST', { eventId: randomUUID(), speaker: values.speaker ?? 'Participant', text: required(positionals[2], 'Question') });
+      let question = positionals[2];
+      if (command === 'listen') {
+        await client.json(`/api/v1/meetings/${meetingId}`);
+        console.error('Listening locally for one English utterance, up to 10 seconds. Address OutOfOffice directly.');
+        const recognized = await new WindowsSpeechRecognizer().listen(controller.signal);
+        if (recognized.confidence < 0.65) throw new Error('Recognition confidence was too low; nothing was submitted. Please try again or use ask.');
+        question = recognized.text;
+      }
+      const response = await client.json<any>(`/api/v1/meetings/${meetingId}/utterances`, 'POST', { eventId: randomUUID(), speaker: values.speaker ?? 'Participant', text: required(question, 'Question') });
       console.log(JSON.stringify(response, null, 2));
       if (values.speak && response.playbackStatus === 'AUTHORIZED') await play(client, meetingId, response.id, await render(client, meetingId, response.id));
       return;

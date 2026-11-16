@@ -95,3 +95,8 @@ test('mute and unmute cannot reopen a revoked playback gate', () => {
   const gate = new PlaybackGate(now + 1000, () => now);
   gate.revoke(); gate.mute(); gate.unmute(); assert.equal(gate.begin(), null);
 });
+test('the default agent recognizes its spoken name without broadening other agents aliases', () => {
+  assert.equal(decideTurn(context('Out of office, what is the status?')).kind, 'ANSWER');
+  const input = context('Out of office, what is the status?'); input.agent.displayName = 'Maya';
+  assert.equal(decideTurn(input).kind, 'IGNORE');
+});

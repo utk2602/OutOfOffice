@@ -33,3 +33,5 @@ pnpm start
 ```
 
 In another terminal, run `pnpm agent --help`. `pnpm demo` runs the complete workflow in an isolated in-memory database. `pnpm demo --voice` additionally streams real stock speech silently on Windows.
+
+`pnpm agent listen <meetingId> --speak` explicitly captures one local microphone utterance, routes its transcript and speaks an authorized answer. This optional Windows English harness rejects recognition confidence below 0.65; it does not identify meeting speakers. `pnpm speech:check --recognize` tests synthesis and recognition using synthetic audio without opening the microphone.
