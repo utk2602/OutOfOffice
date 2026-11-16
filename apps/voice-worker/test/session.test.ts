@@ -84,3 +84,10 @@ test('a speech adapter startup failure releases the active operation', async () 
   const next = session.receive(utterance(undefined, 'retry'));
   assert.equal((await session.speak(next.id, synthesizer, sink)).reason, 'completed');
 });
+test('rendered audio permission expires with its sources and cannot survive a new turn', async () => {
+  let current = now;
+  const session = new VoiceSession(agent, meeting, [{ ...fact, validUntil: new Date(now + 1000).toISOString() }], () => current);
+  const response = session.receive(utterance()); await session.speak(response.id, synthesizer, sink);
+  assert.equal(session.canPlay(response.id), true); current += 1000; assert.equal(session.canPlay(response.id), false);
+  current = now; session.interrupt(); assert.equal(session.canPlay(response.id), false);
+});

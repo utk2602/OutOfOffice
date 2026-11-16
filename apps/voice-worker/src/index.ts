@@ -114,6 +114,14 @@ export class VoiceSession {
     followUp.status = text ? 'resolved' : 'dismissed'; followUp.ownerResponse = text;
     // Recording the owner's answer never grants a speaking permit.
   }
+  canPlay(responseId: string): boolean {
+    this.expire();
+    const response = this.record.responses.find(item => item.id === responseId);
+    const current = this.currentSources();
+    return this.record.meeting.status === 'ACTIVE' && this.record.meeting.speechState === 'READY' &&
+      response?.playbackStatus === 'TRANSMITTED' && response.epoch === this.gate.currentEpoch &&
+      response.evidence.every(source => current[source.sourceId] === source.version);
+  }
   async speak(responseId: string, synthesizer: SpeechSynthesizer, sink: AudioSink): Promise<PlaybackResult> {
     this.expire();
     const response = this.record.responses.find(item => item.id === responseId);

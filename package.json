@@ -7,8 +7,13 @@
   "engines": { "node": ">=22.12.0" },
   "scripts": {
     "setup:local": "tsx scripts/setup.ts",
+    "dev": "tsx watch apps/api/src/main.ts",
+    "start": "tsx apps/api/src/main.ts",
+    "agent": "tsx scripts/client.ts",
+    "demo": "tsx scripts/demo.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx scripts/test.ts",
+    "test:integration": "tsx --test apps/api/test/api.test.ts",
     "test:audio": "tsx --test packages/voice-sdk/test/audio.test.ts packages/voice-sdk/test/speech.test.ts",
     "speech:check": "tsx scripts/speech-check.ts"
   },

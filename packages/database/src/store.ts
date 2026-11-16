@@ -63,6 +63,15 @@ export class RecordStore {
       await tx.query('DELETE FROM facts WHERE owner_id=$1 AND id=$2', [owner, id]); await this.audit(tx, owner, id, 'fact.deleted');
     });
   }
+  async deleteAgent(owner: string, id: string): Promise<void> {
+    await this.database.transaction(async tx => {
+      await document<Agent>(tx, 'SELECT document FROM agents WHERE owner_id=$1 AND id=$2', [owner, id]);
+      const active = await tx.query("SELECT id FROM meetings WHERE owner_id=$1 AND agent_id=$2 AND status='ACTIVE'", [owner, id]);
+      if (active.rows.length) throw new StoreError('MEETING_ACTIVE', 'Stop the agent meetings before deletion.', 409);
+      await tx.query('DELETE FROM agents WHERE owner_id=$1 AND id=$2', [owner, id]);
+      await this.audit(tx, owner, id, 'agent.deleted');
+    });
+  }
   async dispatch(owner: string, input: MeetingInput, key: string): Promise<{ record: SessionRecord; created: boolean }> {
     if (!/^[a-zA-Z0-9_-]{1,100}$/.test(key)) throw new StoreError('INVALID_IDEMPOTENCY_KEY', 'Use an Idempotency-Key of 1–100 letters, digits, hyphens or underscores.');
     const hash = createHash('sha256').update(JSON.stringify({ ...input, sourceIds: [...input.sourceIds].sort() })).digest('hex');
@@ -99,7 +108,7 @@ export class RecordStore {
     return document(this.database, 'SELECT s.document FROM session_records s JOIN meetings m ON m.id=s.meeting_id WHERE m.owner_id=$1 AND m.id=$2', [owner, id]);
   }
   async listMeetings(owner: string): Promise<Meeting[]> {
-    return (await this.database.query<{ document: Meeting }>('SELECT document FROM meetings WHERE owner_id=$1 ORDER BY id DESC LIMIT 100', [owner])).rows.map(row => row.document);
+    return (await this.database.query<{ document: Meeting }>("SELECT document FROM meetings WHERE owner_id=$1 ORDER BY document->>'startedAt' DESC LIMIT 100", [owner])).rows.map(row => row.document);
   }
   async saveRecord(owner: string, record: SessionRecord): Promise<void> {
     await this.database.transaction(async tx => {
