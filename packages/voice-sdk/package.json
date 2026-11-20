@@ -3,5 +3,8 @@
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
-  "dependencies": { "@outofoffice/agent-core": "workspace:*" }
+  "dependencies": {
+    "@google/genai": "3.6.1",
+    "@outofoffice/agent-core": "workspace:*"
+  }
 }
