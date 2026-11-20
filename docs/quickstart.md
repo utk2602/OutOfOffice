@@ -8,7 +8,7 @@ pnpm setup:local
 pnpm start
 ```
 
-The API listens at `http://127.0.0.1:4000`. `setup:local` generates a random bearer secret in the ignored `.env` file and preserves an existing file. The CLI reads the same local file; you do not need to copy the token into a command. Local PostgreSQL data lives in `.data/postgres`. Docker and model keys are not required. Run only one API process for this workspace. Stop it with Ctrl+C before starting a replacement.
+The API listens at `http://127.0.0.1:4000`. `setup:local` generates a random bearer secret in the ignored `.env` file and preserves existing values while adding missing configuration fields. The CLI reads the same local file; you do not need to copy the token into a command. Local PostgreSQL data lives in `.data/postgres`. Docker and model keys are not required for local mode. Run only one API process for this workspace. Stop it with Ctrl+C before starting a replacement.
 
 In a second terminal:
 
@@ -73,6 +73,7 @@ pnpm typecheck
 pnpm test
 pnpm eval:agent
 pnpm build
+pnpm smoke:built
 pnpm start:built
 ```
 
@@ -80,4 +81,4 @@ The build emits `apps/api/dist/main.js`. The built API uses the same `.env` and 
 
 `DATABASE_URL` optionally selects an existing PostgreSQL server. This driver and its SQL are type checked; acceptance tests currently run against embedded PostgreSQL. No server is provisioned automatically. The local usage budget measures simulation time and is unrelated to any vendor billing.
 
-Live Google Meet bots, Attendee/Gemini transport, multi-participant STT, native model responses, participant-consent controls, vendor retention verification and the dashboard remain the next integration milestone. Keys alone do not enable them. The current app never dispatches a hosted bot or calls a model API.
+For opt-in Google Meet dispatch, signed Attendee captions, owner consent controls and optional Gemini Live speech, use [the hosted meeting guide](hosted.md). Hosted mode requires additional configuration and an explicit authorized dispatch. Real provider acceptance, audible latency and provider retention verification are pending; the dashboard remains deferred.
