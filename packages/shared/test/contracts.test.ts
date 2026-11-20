@@ -12,6 +12,12 @@ test('dispatch requires explicit authorization and rejects extra provider contro
   assert.equal(meetingInputSchema.safeParse({ ownerAuthorized: false }).success, false);
   assert.equal(factInputSchema.safeParse({ title: 'Build', topic: 'status', text: 'x', ownerId: 'other' }).success, false);
 });
+test('hosted dispatch requires a validated Meet link and explicit consent/data acknowledgements', () => {
+  const input = { agentId: '00000000-0000-4000-8000-000000000001', title: 'Standup', provider: 'attendee', sourceIds: ['00000000-0000-4000-8000-000000000002'], ownerAuthorized: true, meetingUrl: 'https://meet.google.com/abc-defg-hij' };
+  assert.equal(meetingInputSchema.safeParse(input).success, false);
+  assert.equal(meetingInputSchema.safeParse({ ...input, participantsConsented: true, providerDataAccepted: true }).success, true);
+  assert.equal(meetingInputSchema.safeParse({ ...input, participantsConsented: true, providerDataAccepted: true, meetingUrl: 'https://evil.example' }).success, false);
+});
 test('meeting URL validation rejects arbitrary hosts, credentials and redirects', () => {
   assert.equal(parseMeetUrl('https://meet.google.com/abc-defg-hij?authuser=1'), 'https://meet.google.com/abc-defg-hij');
   for (const value of ['http://meet.google.com/abc-defg-hij', 'https://meet.google.com.evil.org/abc-defg-hij', 'https://user@meet.google.com/abc-defg-hij', 'https://meet.google.com/redirect']) {

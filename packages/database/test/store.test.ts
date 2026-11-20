@@ -23,6 +23,44 @@ async function owner() {
 }
 const errorCode = (code: string) => (error: unknown) => error instanceof StoreError && error.code === code;
 
+test('hosted dispatch atomically creates a muted attempt and retains its reservation after restart', async () => {
+  const user = await owner();
+  const result = await store.dispatch(user.id, { ...user.input, provider: 'attendee', meetingUrl: 'https://meet.google.com/abc-defg-hij', participantsConsented: true, providerDataAccepted: true }, 'hosted');
+  const id = result.record.meeting.id;
+  assert.equal(result.record.meeting.speechState, 'MUTED');
+  const attempt = await store.getAttempt(user.id, id); assert.equal(attempt.state, 'PREPARED');
+  attempt.state = 'UNCERTAIN'; await store.updateAttempt(attempt);
+  now += 1000; await store.recoverInterrupted();
+  assert.equal((await store.usage(user.id)).reservedSeconds, 60);
+  await assert.rejects(store.deleteMeeting(user.id, id), errorCode('PROVIDER_DATA_PENDING'));
+  await assert.rejects(store.deleteAgent(user.id, user.agent.id), errorCode('PROVIDER_DATA_PENDING'));
+  const other = await owner(); await assert.rejects(store.dispatch(other.id, other.input, 'other'), errorCode('HOSTED_ATTEMPT_PENDING'));
+  attempt.state = 'ENDED'; attempt.providerState = 'ended'; attempt.deletion = 'confirmed'; await store.updateAttempt(attempt);
+  await store.saveRecord(user.id, await store.getRecord(user.id, id));
+  assert.equal((await store.usage(user.id)).actualSeconds, 60);
+  assert.equal((await store.usage(user.id)).reservedSeconds, 0);
+  await store.deleteMeeting(user.id, id);
+  assert.equal((await store.usage(user.id)).actualSeconds, 60);
+});
+test('provider attempts reject cross-owner access, identity changes and terminal reopening', async () => {
+  const user = await owner(); const other = await owner();
+  const { record } = await store.dispatch(user.id, { ...user.input, provider: 'attendee', meetingUrl: 'https://meet.google.com/abc-defg-hij', participantsConsented: true, providerDataAccepted: true }, 'pinned');
+  await assert.rejects(store.getAttempt(other.id, record.meeting.id), errorCode('NOT_FOUND'));
+  const attempt = await store.getAttempt(user.id, record.meeting.id); attempt.botId = 'bot_123'; await store.updateAttempt(attempt);
+  await assert.rejects(store.updateAttempt({ ...attempt, botId: 'bot_other' }), errorCode('BOT_ID_CONFLICT'));
+  attempt.state = 'ENDED'; await store.updateAttempt(attempt);
+  await assert.rejects(store.updateAttempt({ ...attempt, state: 'TRACKING' }), errorCode('TERMINAL_STATE'));
+});
+test('hosted usage cap survives local content deletion', async () => {
+  const user = await owner(); const bounded = new RecordStore(db, { ...limits, hostedBudgetSeconds: 60 }, () => now);
+  const input: MeetingInput = { ...user.input, provider: 'attendee', meetingUrl: 'https://meet.google.com/abc-defg-hij', participantsConsented: true, providerDataAccepted: true };
+  const { record } = await bounded.dispatch(user.id, input, 'first-hosted');
+  const attempt = await bounded.getAttempt(user.id, record.meeting.id); attempt.state = 'ENDED'; attempt.providerState = 'ended'; attempt.deletion = 'confirmed'; await bounded.updateAttempt(attempt);
+  record.meeting.status = 'COMPLETED'; record.meeting.endedAt = new Date(now).toISOString(); await bounded.saveRecord(user.id, record);
+  await bounded.deleteMeeting(user.id, record.meeting.id);
+  await assert.rejects(bounded.dispatch(user.id, input, 'next-hosted'), errorCode('HOSTED_BUDGET_EXHAUSTED'));
+});
+
 test('concurrent identical dispatch reserves usage once and returns one meeting', async () => {
   const user = await owner();
   const results = await Promise.all(Array.from({ length: 5 }, () => store.dispatch(user.id, user.input, 'once')));

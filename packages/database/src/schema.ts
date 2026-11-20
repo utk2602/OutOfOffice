@@ -31,4 +31,8 @@ export const migrations = [
   `CREATE TABLE IF NOT EXISTS audits (
     id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES owners(id), resource_id uuid,
     action text NOT NULL, created_at timestamptz NOT NULL)`,
+  `ALTER TABLE usage_ledger ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'local'`,
+  `CREATE TABLE IF NOT EXISTS hosted_attempts (
+    meeting_id uuid PRIMARY KEY, owner_id uuid NOT NULL, document jsonb NOT NULL,
+    FOREIGN KEY(meeting_id, owner_id) REFERENCES meetings(id, owner_id) ON DELETE CASCADE)`,
 ];
