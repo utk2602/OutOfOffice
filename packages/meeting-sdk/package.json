@@ -1,0 +1,13 @@
+{
+  "name": "@outofoffice/meeting-sdk",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@outofoffice/shared": "workspace:*",
+    "@outofoffice/voice-sdk": "workspace:*",
+    "zod": "4.6.7",
+    "ws": "8.23.0"
+  },
+  "devDependencies": { "@types/ws": "8.18.1" }
+}
