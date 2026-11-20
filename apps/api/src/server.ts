@@ -11,6 +11,9 @@ import { agentInputSchema, factInputSchema, idSchema, textSchema, utteranceInput
 import { RecordStore, StoreError } from '@outofoffice/database';
 import { SessionError, type SpeechSynthesizer } from '@outofoffice/voice-worker';
 import { WindowsSpeechSynthesizer } from '@outofoffice/voice-sdk';
+import { type MeetingProvider } from '@outofoffice/meeting-sdk';
+import { HostedMeetings } from './hosted.ts';
+import { createProviderIngress } from './ingress.ts';
 import { AgentService, summarize } from './service.ts';
 
 type Request = IncomingMessage & { ownerId: string; requestId: string; originalUrl: string };
@@ -56,6 +59,20 @@ class ApiController {
   }
   @Get('meetings') meetings(@Req() request: Request) { return this.service.store.listMeetings(owner(request)); }
   @Get('meetings/:id') record(@Req() request: Request, @Param('id') id: string) { return this.service.getRecord(owner(request), identifier(id)); }
+  @Get('meetings/:id/provider') providerStatus(@Req() request: Request, @Param('id') id: string) {
+    return (this.service.hosted as HostedMeetings | undefined)?.status(owner(request), identifier(id)) ?? { enabled: false };
+  }
+  @Post('meetings/:id/enable-speaking') @HttpCode(200)
+  enableSpeaking(@Req() request: Request, @Param('id') id: string, @Body() body: unknown) {
+    z.object({ participantsConsented: z.literal(true), disclosureConfirmed: z.literal(true) }).strict().parse(body);
+    if (!this.service.hosted) throw new StoreError('HOSTED_DISABLED', 'Hosted integration is disabled.', 409);
+    return (this.service.hosted as HostedMeetings).enableSpeaking(owner(request), identifier(id));
+  }
+  @Post('meetings/:id/reconcile') @HttpCode(200)
+  reconcile(@Req() request: Request, @Param('id') id: string) {
+    if (!this.service.hosted) throw new StoreError('HOSTED_DISABLED', 'Hosted integration is disabled.', 409);
+    return (this.service.hosted as HostedMeetings).reconcile(owner(request), identifier(id));
+  }
   @Get('meetings/:id/transcript') async transcript(@Req() request: Request, @Param('id') id: string) { return (await this.service.getRecord(owner(request), identifier(id))).transcript; }
   @Get('meetings/:id/summary') async summary(@Req() request: Request, @Param('id') id: string) { return summarize(await this.service.getRecord(owner(request), identifier(id))); }
   @Get('meetings/:id/export') exportMeeting(@Req() request: Request, @Param('id') id: string) { return this.service.getRecord(owner(request), identifier(id)); }
@@ -63,7 +80,11 @@ class ApiController {
     return this.service.playbackPermission(owner(request), identifier(id), identifier(responseId));
   }
   @Post('meetings/:id/utterances') @HttpCode(200)
-  utterance(@Req() request: Request, @Param('id') id: string, @Body() body: unknown) { return this.service.receive(owner(request), identifier(id), utteranceInputSchema.parse(body)); }
+  async utterance(@Req() request: Request, @Param('id') id: string, @Body() body: unknown) {
+    const record = await this.service.getRecord(owner(request), identifier(id));
+    if (record.meeting.provider === 'attendee') throw new StoreError('PROVIDER_TRANSCRIPT_REQUIRED', 'Hosted utterances must come from authenticated provider captions.', 409);
+    return this.service.receive(owner(request), identifier(id), utteranceInputSchema.parse(body));
+  }
   @Post('meetings/:id/:action') @HttpCode(200)
   control(@Req() request: Request, @Param('id') id: string, @Param('action') action: string) {
     return this.service.control(owner(request), identifier(id), z.enum(['mute', 'unmute', 'interrupt', 'leave', 'revoke']).parse(action));
@@ -97,6 +118,7 @@ class ApiController {
   async audio(@Req() request: Request, @Res() response: Response, @Param('id') rawId: string, @Param('responseId') rawResponseId: string) {
     const id = identifier(rawId); const responseId = identifier(rawResponseId);
     const record = await this.service.getRecord(owner(request), id);
+    if (record.meeting.provider === 'attendee') throw new StoreError('HOSTED_AUDIO_OWNED', 'Hosted audio is sent only through its meeting transport.', 409);
     if (!record.responses.some(item => item.id === responseId)) throw new StoreError('NOT_FOUND', 'Response not found.', 404);
     let completed = false;
     const disconnected = () => { if (!completed) void this.service.control(owner(request), id, 'interrupt').catch(() => undefined); };
@@ -125,12 +147,15 @@ class ApiController {
 }
 
 export type ApiIdentity = { ownerId: string; token: string };
-export async function createApi(options: { store: RecordStore; identities: ApiIdentity[]; synthesizer?: SpeechSynthesizer }) {
+export type HostedOptions = { provider: MeetingProvider; synthesizer: SpeechSynthesizer; publicUrl: string; webhookSecret: string; callbackPort: number };
+export async function createApi(options: { store: RecordStore; identities: ApiIdentity[]; synthesizer?: SpeechSynthesizer; hosted?: HostedOptions }) {
   if (!options.identities.length || options.identities.some(identity => !idSchema.safeParse(identity.ownerId).success || identity.token.length < 32) ||
       new Set(options.identities.map(identity => identity.token)).size !== options.identities.length) throw new Error('Configure unique local API tokens of at least 32 characters and valid owner IDs.');
   for (const identity of options.identities) await options.store.ensureOwner(identity.ownerId);
   const service = new AgentService(options.store, options.synthesizer ?? new WindowsSpeechSynthesizer());
   await service.initialize();
+  const hosted = options.hosted ? new HostedMeetings(service, options.hosted.provider, options.hosted.synthesizer, options.hosted.publicUrl.replace(/\/$/, '')) : undefined;
+  service.hosted = hosted;
   @Module({ controllers: [ApiController], providers: [{ provide: SERVICE, useValue: service }] })
   class LocalModule {}
   const app = await NestFactory.create<NestExpressApplication>(LocalModule, { logger: false, bodyParser: false, abortOnError: false });
@@ -142,7 +167,7 @@ export async function createApi(options: { store: RecordStore; identities: ApiId
     const fail = (status: number, code: string, message: string) => response.status(status).json({ error: { code, message, requestId: request.requestId } });
     const host = request.headers.host ?? '';
     if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host) || request.headers.origin) { fail(403, 'LOCAL_CLIENT_REQUIRED', 'Use an authenticated local CLI client.'); return; }
-    if (request.url === '/health/live') { response.json({ status: 'ok', mode: 'local' }); return; }
+    if (request.url === '/health/live') { response.json({ status: 'ok', mode: hosted ? 'hosted-enabled' : 'local' }); return; }
     const authorization = request.headers.authorization ?? '';
     const digest = createHash('sha256').update(authorization.startsWith('Bearer ') ? authorization.slice(7) : '').digest();
     const identity = credentials.find(credential => timingSafeEqual(credential.digest, digest));
@@ -154,7 +179,7 @@ export async function createApi(options: { store: RecordStore; identities: ApiId
     rate.count++; rates.set(identity.ownerId, rate);
     if (rate.count > 600) { fail(429, 'RATE_LIMIT', 'Local request limit exceeded.'); return; }
     if (request.url === '/health/ready') {
-      void options.store.database.query('SELECT 1').then(() => response.json({ status: 'ready', mode: 'local' }), () => fail(503, 'DATABASE_UNAVAILABLE', 'The database is unavailable.')); return;
+      void options.store.database.query('SELECT 1').then(() => response.json({ status: 'ready', mode: hosted ? 'hosted-enabled' : 'local' }), () => fail(503, 'DATABASE_UNAVAILABLE', 'The database is unavailable.')); return;
     }
     next();
   });
@@ -162,5 +187,8 @@ export async function createApi(options: { store: RecordStore; identities: ApiId
   await app.init();
   const server = app.getHttpServer() as import('node:http').Server;
   server.requestTimeout = 10_000; server.headersTimeout = 10_000;
-  return { app, service, close: async () => { await service.close(); server.closeAllConnections(); await app.close(); } };
+  const ingress = hosted && options.hosted ? createProviderIngress(hosted, options.hosted.webhookSecret) : undefined;
+  try { await hosted?.initialize(); if (ingress) await ingress.listen(options.hosted!.callbackPort); }
+  catch (error) { await hosted?.close(); await ingress?.close(); await service.close(); await app.close(); throw error; }
+  return { app, service, hosted, ingress, close: async () => { service.beginShutdown(); await hosted?.close(); await ingress?.close(); await service.close(); server.closeAllConnections(); await app.close(); } };
 }

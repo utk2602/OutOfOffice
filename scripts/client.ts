@@ -19,6 +19,10 @@ pnpm agent update-agent <agentId> --file patch.json
 pnpm agent delete-fact <factId>
 pnpm agent delete-agent <agentId>
 pnpm agent meeting <agentId> --authorize [--sources id,id] [--duration 300] [--title Standup] [--key retry-key]
+pnpm agent meeting <agentId> --meet https://meet.google.com/abc-defg-hij --authorize --consent --accept-provider-data [--duration 300]
+pnpm agent provider <meetingId>
+pnpm agent enable-speaking <meetingId> --consent --disclosed
+pnpm agent reconcile <meetingId>
 pnpm agent ask <meetingId> "OutOfOffice, what is the status?" [--speaker Sam] [--speak]
 pnpm agent listen <meetingId> [--speaker Sam] [--speak]
 pnpm agent render <meetingId> <responseId> --out answer.wav
@@ -30,7 +34,9 @@ pnpm agent delete-meeting <meetingId>
 
 Facts are private unless --approve explicitly makes them meeting-shareable.
 --speak plays the stock Windows voice; render explicitly saves a WAV file.
-All meetings are local simulations. No Google Meet bot is dispatched.`;
+Meetings are local unless --meet is supplied and hosted mode is enabled in .env.
+Hosted mode uses Attendee captions. Confirm actual participant consent before --consent.
+Enable speaking only after admission, a received caption and identity disclosure.`;
 
 const controller = new AbortController();
 process.once('SIGINT', () => controller.abort());
@@ -38,6 +44,7 @@ const { positionals, values } = parseArgs({ allowPositionals: true, options: {
   owner: { type: 'string' }, topics: { type: 'string' }, prohibited: { type: 'string' },
   title: { type: 'string' }, topic: { type: 'string' }, text: { type: 'string' }, approve: { type: 'boolean' },
   sources: { type: 'string' }, duration: { type: 'string' }, authorize: { type: 'boolean' }, key: { type: 'string' },
+  meet: { type: 'string' }, consent: { type: 'boolean' }, 'accept-provider-data': { type: 'boolean' }, disclosed: { type: 'boolean' },
   speaker: { type: 'string' }, speak: { type: 'boolean' }, out: { type: 'string' }, file: { type: 'string' }, help: { type: 'boolean' },
 } });
 function required(value: string | undefined, label: string): string { if (!value) throw new Error(`${label} is required. Run pnpm agent --help.`); return value; }
@@ -103,16 +110,26 @@ async function main() {
     case 'delete-fact': output = await client.json(`/api/v1/knowledge/${part(1)}`, 'DELETE'); break;
     case 'delete-agent': output = await client.json(`/api/v1/agents/${part(1)}`, 'DELETE'); break;
     case 'meeting': {
-      if (!values.authorize) throw new Error('Use --authorize to confirm this local meeting may use your selected approved facts.');
+      if (!values.authorize) throw new Error('Use --authorize to confirm this meeting may use your selected approved facts.');
+      if (values.meet && (!values.consent || !values['accept-provider-data'])) throw new Error('Hosted dispatch requires --consent and --accept-provider-data. Read docs/hosted.md before inviting the bot.');
       const agentId = part(1);
       const sources = values.sources?.split(',') ?? (await client.json<any[]>(`/api/v1/agents/${agentId}/knowledge`)).filter(fact => fact.approved && fact.sensitivity === 'MEETING' && (!fact.validUntil || Date.parse(fact.validUntil) > Date.now())).map(fact => fact.id);
-      output = await client.json('/api/v1/meetings', 'POST', { agentId, title: values.title ?? 'Local standup', sourceIds: sources, maxDurationSeconds: Number(values.duration ?? 300), ownerAuthorized: true }, { 'Idempotency-Key': values.key ?? randomUUID() }); break;
+      output = await client.json('/api/v1/meetings', 'POST', { agentId, title: values.title ?? (values.meet ? 'Controlled Google Meet' : 'Local standup'), sourceIds: sources, maxDurationSeconds: Number(values.duration ?? 300), ownerAuthorized: true,
+        ...(values.meet ? { provider: 'attendee', meetingUrl: values.meet, participantsConsented: true, providerDataAccepted: true } : {}),
+      }, { 'Idempotency-Key': values.key ?? randomUUID() }); break;
+    }
+    case 'provider': output = await client.json(`/api/v1/meetings/${part(1)}/provider`); break;
+    case 'reconcile': output = await client.json(`/api/v1/meetings/${part(1)}/reconcile`, 'POST'); break;
+    case 'enable-speaking': {
+      if (!values.consent || !values.disclosed) throw new Error('Confirm actual participant consent and the bot disclosure with --consent --disclosed.');
+      output = await client.json(`/api/v1/meetings/${part(1)}/enable-speaking`, 'POST', { participantsConsented: true, disclosureConfirmed: true }); break;
     }
     case 'ask': case 'listen': {
       const meetingId = part(1);
       let question = positionals[2];
       if (command === 'listen') {
         const record = await client.json(`/api/v1/meetings/${meetingId}`);
+        if (record.meeting.provider !== 'local') throw new Error('Hosted meetings receive captions from Attendee; the local microphone harness is for local meetings.');
         if (record.meeting.status !== 'ACTIVE' || record.meeting.speechState !== 'READY') throw new Error('Use an active, unmuted meeting before opening the microphone.');
         console.error('Listening locally for one English utterance, up to 10 seconds. Address OutOfOffice directly.');
         const recognized = await new WindowsSpeechRecognizer().listen(controller.signal);

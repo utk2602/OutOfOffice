@@ -6,6 +6,13 @@ import { agentInputSchema, factInputSchema, meetingInputSchema, type EventEnvelo
   type Agent, type UtteranceInput } from '@outofoffice/shared';
 import type { AudioSink } from '@outofoffice/voice-sdk';
 
+export interface HostedController {
+  start(owner: string, id: string): Promise<void>;
+  assertCanSpeak(id: string): void;
+  stop(owner: string, id: string): Promise<void>;
+  deleteData(owner: string, id: string): Promise<void>;
+}
+
 export function summarize(record: SessionRecord) {
   return {
     meetingId: record.meeting.id, title: record.meeting.title, status: record.meeting.status,
@@ -31,6 +38,10 @@ export class AgentService {
   private ticking = false;
   private closing = false;
   get isClosing(): boolean { return this.closing; }
+  beginShutdown(): void { this.closing = true; }
+  hosted: HostedController | undefined;
+  /** In-process provider cancellation after callback authentication; no database wait on the media path. */
+  interruptImmediately(id: string): void { this.sessions.get(id)?.interrupt(); }
   constructor(readonly store: RecordStore, private readonly synth: SpeechSynthesizer) { this.events.setMaxListeners(100); }
   async initialize(): Promise<void> {
     await this.store.recoverInterrupted(); await this.store.pruneRetention();
@@ -72,7 +83,9 @@ export class AgentService {
   async dispatch(owner: string, body: unknown, key: string) {
     return this.serial('dispatch', async () => {
       if (this.closing) throw new StoreError('SHUTTING_DOWN', 'The local worker is shutting down.', 503);
-      const input = meetingInputSchema.parse(body); const result = await this.store.dispatch(owner, input, key);
+      const input = meetingInputSchema.parse(body);
+      if (input.provider === 'attendee' && !this.hosted) throw new StoreError('HOSTED_DISABLED', 'Configure and enable hosted meetings before dispatch.', 409);
+      const result = await this.store.dispatch(owner, input, key);
       if (result.created) {
         try {
           const agent = await this.store.getAgent(owner, input.agentId);
@@ -84,6 +97,7 @@ export class AgentService {
           await this.store.saveRecord(owner, result.record); throw error;
         }
       }
+      if (result.created && input.provider === 'attendee') await this.hosted!.start(owner, result.record.meeting.id);
       return { ...result, record: await this.getRecord(owner, result.record.meeting.id) };
     });
   }
@@ -99,16 +113,22 @@ export class AgentService {
     if (!session) throw new SessionError('MEETING_ENDED', 'There is no active local worker for this meeting.');
     return session;
   }
-  async control(owner: string, id: string, action: 'mute' | 'unmute' | 'interrupt' | 'leave' | 'revoke') {
-    await this.store.getRecord(owner, id);
+  async control(owner: string, id: string, action: 'mute' | 'unmute' | 'interrupt' | 'leave' | 'revoke', providerInternal = false) {
+    const stored = await this.store.getRecord(owner, id);
+    if (stored.meeting.provider === 'attendee' && action === 'unmute' && !providerInternal) this.hosted?.assertCanSpeak(id);
     const session = this.sessions.get(id);
     if (!session) {
-      if (action === 'leave' || action === 'revoke' || action === 'mute') return this.getRecord(owner, id);
+      if (action === 'leave' || action === 'revoke' || action === 'mute') {
+        if (stored.meeting.provider === 'attendee' && !providerInternal && action !== 'mute') await this.hosted?.stop(owner, id);
+        return this.getRecord(owner, id);
+      }
       throw new SessionError('MEETING_ENDED', 'The meeting has ended.');
     }
     // Cancellation is synchronous after ownership verification; it never waits behind slow persistence.
     if (action === 'leave') session.end(); else if (action === 'revoke') session.end('REVOKED'); else session[action]();
-    return this.serial(id, async () => { const record = await this.persist(owner, session); this.emit(record, 'meeting.state'); return record; });
+    const record = await this.serial(id, async () => { const record = await this.persist(owner, session); this.emit(record, 'meeting.state'); return record; });
+    if (stored.meeting.provider === 'attendee' && !providerInternal && (action === 'leave' || action === 'revoke')) await this.hosted?.stop(owner, id);
+    return record;
   }
   async listFacts(owner: string, agentId: string) {
     await this.store.getAgent(owner, agentId);
@@ -162,9 +182,9 @@ export class AgentService {
       await this.store.deleteAgent(owner, id); return { deleted: true };
     });
   }
-  async speak(owner: string, id: string, responseId: string, sink: AudioSink) {
+  async speak(owner: string, id: string, responseId: string, sink: AudioSink, synthesizer: SpeechSynthesizer = this.synth) {
     await this.store.getRecord(owner, id); const session = this.requireSession(id);
-    try { return await session.speak(responseId, this.synth, sink); }
+    try { return await session.speak(responseId, synthesizer, sink); }
     finally { if (!this.deleted.has(id)) await this.serial(id, async () => { const record = await this.persist(owner, session); this.emit(record, 'agent.playback'); }); }
   }
   async resolve(owner: string, id: string, answer: string | null) {
@@ -181,8 +201,12 @@ export class AgentService {
     });
   }
   async deleteMeeting(owner: string, id: string) {
-    await this.store.getRecord(owner, id);
+    const stored = await this.store.getRecord(owner, id);
     if (this.sessions.has(id)) await this.control(owner, id, 'revoke');
+    if (stored.meeting.provider === 'attendee') {
+      if (!this.hosted) throw new StoreError('PROVIDER_DATA_PENDING', 'Enable hosted integration to confirm provider data deletion.', 409);
+      await this.hosted.deleteData(owner, id);
+    }
     return this.serial(id, async () => {
       const record = await this.store.getRecord(owner, id); this.deleted.add(id);
       await this.store.deleteMeeting(owner, id); this.sessions.delete(id); this.emit(record, 'meeting.deleted', { id }); return { deleted: true };

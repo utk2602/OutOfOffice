@@ -83,6 +83,8 @@ export type HostedAttempt = {
   state: 'PREPARED' | 'CREATING' | 'UNCERTAIN' | 'TRACKING' | 'STOPPING' | 'ENDED';
   providerState: string; capabilityHash: string | null; consentAt: string; updatedAt: string;
   lastStateAt: string | null; speechCalls: number; lastError: string | null;
+  disclosureConfirmedAt: string | null;
+  latencySamples: { captionDelayMs: number; firstFrameFromCaptionMs: number; firstFrameFromQuestionEndMs: number }[];
   deletion: 'not_requested' | 'pending' | 'confirmed';
 };
 export const isActive = (meeting: Meeting) => meeting.status === 'ACTIVE';

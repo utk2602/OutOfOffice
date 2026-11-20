@@ -113,7 +113,7 @@ export class RecordStore {
         const attempt: HostedAttempt = { meetingId: meeting.id, ownerId: owner, meetingUrl: input.meetingUrl!,
           botName: `${agent.ownerName}'s AI Delegate | OutOfOffice`.slice(0, 120), botId: null,
           state: 'PREPARED', providerState: 'not_created', capabilityHash: null, consentAt: meeting.startedAt,
-          updatedAt: meeting.startedAt, lastStateAt: null, speechCalls: 0, lastError: null, deletion: 'not_requested' };
+          updatedAt: meeting.startedAt, lastStateAt: null, speechCalls: 0, lastError: null, deletion: 'not_requested', disclosureConfirmedAt: null, latencySamples: [] };
         await tx.query('INSERT INTO hosted_attempts(meeting_id,owner_id,document) VALUES ($1,$2,$3)', [meeting.id, owner, JSON.stringify(attempt)]);
       }
       for (const id of input.sourceIds) await tx.query('INSERT INTO meeting_sources(meeting_id,owner_id,source_id,source_version) VALUES ($1,$2,$3,$4)', [meeting.id, owner, id, allowed.find(fact => fact.id === id)!.version]);
