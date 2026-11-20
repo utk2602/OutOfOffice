@@ -12,6 +12,7 @@
     "start": "tsx apps/api/src/main.ts",
     "build": "pnpm --filter @outofoffice/api build",
     "start:built": "node apps/api/dist/main.js",
+    "smoke:built": "tsx scripts/smoke-built.ts",
     "agent": "tsx scripts/client.ts",
     "demo": "tsx scripts/demo.ts",
     "eval:agent": "tsx scripts/evaluate.ts",

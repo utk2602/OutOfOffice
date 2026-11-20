@@ -60,7 +60,7 @@ export class GeminiSpeechSynthesizer {
       }, callbacks: { onmessage: message, onerror: () => fail(new SpeechVerificationError()), onclose: () => fail(new SpeechVerificationError()) } });
       // A late connector must close its socket after cancellation rather than leak it.
       void connecting.then(connection => { if (closed || linked.aborted) close(connection); }, () => undefined);
-      const connected = connecting.then(connection => { session = connection; linked.throwIfAborted(); sent = true;
+      const connected = connecting.then(connection => { session = connection; if (closed) throw new SpeechVerificationError(); linked.throwIfAborted(); sent = true;
         connection.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
       });
       await Promise.all([connected, finished]);

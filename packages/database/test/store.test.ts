@@ -58,6 +58,8 @@ test('hosted usage cap survives local content deletion', async () => {
   const attempt = await bounded.getAttempt(user.id, record.meeting.id); attempt.state = 'ENDED'; attempt.providerState = 'ended'; attempt.deletion = 'confirmed'; await bounded.updateAttempt(attempt);
   record.meeting.status = 'COMPLETED'; record.meeting.endedAt = new Date(now).toISOString(); await bounded.saveRecord(user.id, record);
   await bounded.deleteMeeting(user.id, record.meeting.id);
+  assert.equal((await bounded.usage(user.id)).globalHostedConsumedSeconds, 60);
+  assert.equal((await bounded.usage(user.id)).globalHostedRemainingSeconds, 0);
   await assert.rejects(bounded.dispatch(user.id, input, 'next-hosted'), errorCode('HOSTED_BUDGET_EXHAUSTED'));
 });
 

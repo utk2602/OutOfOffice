@@ -156,11 +156,15 @@ export class RecordStore {
       await tx.query('DELETE FROM meetings WHERE owner_id=$1 AND id=$2', [owner, id]); await this.audit(tx, owner, id, 'meeting.deleted');
     });
   }
-  async usage(owner: string): Promise<{ actualSeconds: number; reservedSeconds: number; globalRemainingSeconds: number; budgetSeconds: number }> {
+  async usage(owner: string) {
     const own = await this.database.query<{ actual: string; reserved: string }>('SELECT COALESCE(SUM(actual_seconds),0)::text AS actual,COALESCE(SUM(reserved_seconds),0)::text AS reserved FROM usage_ledger WHERE owner_id=$1', [owner]);
     const global = await this.database.query<{ total: string }>('SELECT COALESCE(SUM(actual_seconds+reserved_seconds),0)::text AS total FROM usage_ledger');
+    const hosted = await this.database.query<{ actual: string; reserved: string }>("SELECT COALESCE(SUM(actual_seconds),0)::text AS actual,COALESCE(SUM(reserved_seconds),0)::text AS reserved FROM usage_ledger WHERE provider='attendee'");
+    const hostedBudget = this.limits.hostedBudgetSeconds ?? 900;
     return { actualSeconds: Number(own.rows[0]?.actual ?? 0), reservedSeconds: Number(own.rows[0]?.reserved ?? 0),
-      globalRemainingSeconds: Math.max(0, this.limits.budgetSeconds - Number(global.rows[0]?.total ?? 0)), budgetSeconds: this.limits.budgetSeconds };
+      globalRemainingSeconds: Math.max(0, this.limits.budgetSeconds - Number(global.rows[0]?.total ?? 0)), budgetSeconds: this.limits.budgetSeconds,
+      globalHostedConsumedSeconds: Number(hosted.rows[0]?.actual ?? 0), globalHostedReservedSeconds: Number(hosted.rows[0]?.reserved ?? 0),
+      globalHostedRemainingSeconds: Math.max(0, hostedBudget - Number(hosted.rows[0]?.actual ?? 0) - Number(hosted.rows[0]?.reserved ?? 0)), hostedBudgetSeconds: hostedBudget };
   }
   async recoverInterrupted(): Promise<void> {
     const rows = await this.database.query<{ document: SessionRecord }>("SELECT s.document FROM session_records s JOIN meetings m ON m.id=s.meeting_id WHERE m.status='ACTIVE'");
